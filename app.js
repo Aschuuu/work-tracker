@@ -25,6 +25,27 @@ let HOL_KO_DYN = {};
   }
 })();
 
+// Holidays missing from the date.nager.at KR dataset.
+// These are applied on top of whatever the API returns, for every year.
+const FIXED_HOLIDAYS_EN = { 'MM-DD': 'name' }; // placeholder, replaced below
+const FIXED_HOLIDAYS_KO = {};
+(function buildFixed(){
+  // May 1 — International Labour Day (근로자의 날)
+  // Listed under a separate act, not included in the official public holiday API.
+  FIXED_HOLIDAYS_EN['05-01'] = "Labour Day";
+  FIXED_HOLIDAYS_KO['05-01'] = "근로자의 날";
+})();
+
+function applyFixedHolidays(years){
+  years.forEach(y => {
+    Object.entries(FIXED_HOLIDAYS_EN).forEach(([mmdd, name]) => {
+      const date = `${y}-${mmdd}`;
+      HOLIDAYS[date]    = name;
+      HOL_KO_DYN[date] = FIXED_HOLIDAYS_KO[mmdd] || name;
+    });
+  });
+}
+
 async function fetchHolidaysForYear(year){
   const cacheKeyEn = 'wt4_hol_'+year;
   const cacheKeyKo = 'wt4_hol_ko_'+year;
@@ -50,6 +71,7 @@ async function fetchHolidaysForYear(year){
     Object.assign(HOL_KO_DYN, koObj);
     localStorage.setItem(cacheKeyEn, JSON.stringify(enObj));
     localStorage.setItem(cacheKeyKo, JSON.stringify(koObj));
+    applyFixedHolidays([year]); // overlay API-missing holidays
   }catch(e){
     console.warn('Holiday fetch failed for', year, e.message);
   }
@@ -58,6 +80,7 @@ async function fetchHolidaysForYear(year){
 // Ensures holidays for the years we need are loaded.
 // Call before every render; kicks off async fetches for any missing years.
 async function ensureHolidays(years){
+  applyFixedHolidays(years); // always apply fixed holidays (instant, no network)
   const missing = years.filter(y => !localStorage.getItem('wt4_hol_'+y));
   if(!missing.length) return; // all cached — synchronous path, no re-render needed
   HOL_LOADING = true;
@@ -70,7 +93,9 @@ async function ensureHolidays(years){
 // Call this at startup to prefetch current ± 1 year in the background
 function prefetchHolidays(){
   const y = new Date().getFullYear();
-  ensureHolidays([y-1, y, y+1, y+2]);
+  const years = [y-1, y, y+1, y+2];
+  applyFixedHolidays(years); // instant — no network needed
+  ensureHolidays(years);
 }
 
 const TR={
